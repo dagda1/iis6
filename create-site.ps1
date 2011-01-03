@@ -53,10 +53,12 @@ function Set-FrameWorkVersion($strID)
       
     $objDir = Get-ChildItem $strPath |  
               where { ($_.GetType().ToString().ToLower() -eq 'system.io.directoryinfo') -and  
-                      ($_.name -match "^(v2.[\d\.]+)$")} |  
-              sort name  
+                      ($_.name -match "^(v4.[\d\.]+)$")} |  
+              sort name  	
+			  			  
     if ($objDir -ne $null)  
     {  
+		Write-Host "Found framework directory $objDir.Name"
         $strPath += $matches[1]  
         $strPath += "\aspnet_regiis.exe"  
         $objSI = New-Object System.Diagnostics.ProcessStartInfo  
@@ -69,6 +71,30 @@ function Set-FrameWorkVersion($strID)
     }  
 }  
 
+### <summary>  
+### Ensure directories are installed  
+### </summary> 
+function Init($SourcePath, $VirDirPath, $TeachMePath)
+{
+	if(!(Test-Path $SourcePath))
+	{
+		Write-Host "Creating directory " + $SourcePath
+		New-Item $SourcePath -type directory
+	}
+	
+	if(!(Test-Path $VirDirPath))
+	{
+		Write-Host "Creating directory " + $VirDirPath
+		New-Item $VirDirPath -type directory	
+	}
+	
+	if(!(Test-Path $TeachMePath))
+	{
+		Write-Host "Creating directory $TeachMePath"
+		New-Item $TeachMePath -type directory
+	}	
+}
+
  
 ### <summary>  
 ### Installs the IIS website.  
@@ -77,13 +103,18 @@ function Set-FrameWorkVersion($strID)
 ### <param name="WebSiteName">Web site name</param>  
 ### <param name="Port">Website port</param>  
 ### <param name="SourcePath">Path of root virtual directory</param>  
-function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath)  
+### <param name="VirDirPath">Virtual directory for store directory</param> 
+### <param name="AppPoolName">Application name</param> 
+### <param name="HostName">Host header</param> 
+function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPath, $AppPoolName, $HostName, $TeachMePath)  
 {  
+	Init $SourcePath $VirDirPath $TeachMePath
     $objLocator = New-Object -com WbemScripting.SWbemLocator  
     $objProvider = $objLocator.ConnectServer($Server, 'root/MicrosoftIISv2')  
     $objService = $objProvider.Get("IIsWebService='W3SVC'")  
     $objBindings = @($objProvider.Get('ServerBinding').SpawnInstance_())  
     $objBindings[0].Properties_.Item('Port').value = $Port  
+	$objBindings[0].Properties_.Item('Hostname').value = $HostName
     $createNewSiteMethod = $objService.Methods_.Item('CreateNewSite')  
   
     $objInParameters = $createNewSiteMethod.InParameters.SpawnInstance_()  
@@ -93,7 +124,6 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath)
      
     # Creating new WebSite '$strWebSiteName'  
     $objOutParameters = $objService.ExecMethod_("CreateNewSite", $objInParameters)  
-
  
     # Getting website ID  
     $id = ''  
@@ -102,35 +132,72 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath)
         if ($id) { $id = $matches[1] }  
     }  
 	
-	Write-Host $id
+	Write-Host "website id = $id"
 	
     if ($id.ToUpper() -match "^W3SVC/\d+$")  
     {  
-        # Creating new Application Pool '$WebSiteName'  
-        $bln = Create-ApplicationPool $Server $WebSiteName 'mydomain' 'myuser' 'P@ssw0rd'  
-  
-        if ($bln)  
-        {  
-            # Configuring Website '$WebSiteName'  
-            $objSite = [ADSI]"IIS://$Server/$id/Root"  
-            $objSite.Put("DefaultDoc", "Default.aspx")  
-            $objSite.Put("AppPoolId", $WebSiteName)  
-            $objsite.put("AuthFlags", 4)  
-            $objsite.Put("AppFriendlyName", $WebSiteName)  
-            $objsite.Put("AccessFlags", 1)  
-            $objsite.Put("AccessRead", $true)  
-            $objsite.Put("AccessScript", $true)  
-            $objsite.Put("AccessExecute", $true)  
-            $objSite.SetInfo()  
+		Write-Host "Web site Id = $id"
+	
+		# Configuring Website '$WebSiteName'  
+        $objSite = [ADSI]"IIS://$Server/$id/Root"  
+        $objSite.Put("DefaultDoc", "Default.aspx")  
+        $objSite.Put("AppPoolId", $AppPoolName)  
+		$objsite.put("AuthFlags", 4)  
+        $objsite.Put("AppFriendlyName", $WebSiteName)  
+        $objsite.Put("AccessFlags", 1)  
+        $objsite.Put("AccessRead", $true)  
+		$objsite.Put("AccessWrite", $true)  
+        $objsite.Put("AccessScript", $true)  
+        #$objsite.Put("AccessExecute", $true)  
+        $objSite.SetInfo()	
 
  
-            # If we are on the web server itself  
-            if ((Get-ChildItem env:COMPUTERNAME).Value.ToUpper() -eq $Server.ToUpper())  
-            {  
-                Set-FrameWorkVersion $id  
-            }  
-        }  
+        # If we are on the web server itself  
+        if ((Get-ChildItem env:COMPUTERNAME).Value.ToUpper() -eq $Server.ToUpper())  
+        {  
+        	Set-FrameWorkVersion $id  
+		}  
+		
+		# enable anonymous access
+		
+		# create virtual directory
+		$newdir = $objSite.Create("IISWebVirtualDir", "store")
+		$newdir.Put("Path", $VirDirPath)
+		$newdir.Put("AccessRead",$true)
+		$newdir.Put("AccessWrite",$true)
+		$newdir.Put("AccessScript", $true)  
+		$newdir.AppCreate2(1) 
+		$newdir.Put("AppFriendlyName", "store")
+		$newdir.SetInfo()		
+		
+		# create child virtual directory
+		$childdir = $newdir.Create("IISWebVirtualDir", "TeachMe")
+		$childdir.Put("Path", $TeachMePath)
+		$childdir.Put("AccessRead",$true)
+		$childdir.Put("AccessWrite",$true)
+		$childdir.Put("AccessScript", $true) 
+		$childdir.AppCreate2(1) 
+		$childdir.Put("AppFriendlyName", "TeachMe")		
+		$childdir.SetInfo()
+		
+		# set ssl properties
+		
+		# start website
     }  
 }  
+
+function Create-VirtualDir($Parent, $FriendlyName, $VirPath)
+{
+	$newdir = $Parent.Create("IISWebVirtualDir", $FriendlyName)
+	$newdir.Put("Path", $VirPath)
+	$newdir.Put("AccessRead", $true)
+	$newdir.Put("AccessWrite",$true)
+	$newdir.Put("AccessScript", $true)  
+	$childdir.AppCreate2(1) 
+	$childdir.Put("AppFriendlyName", $FriendlyName)		
+	$newdir.SetInfo()
+	return $newdir
+}
+
   
-Install-WebServer -Server "." -WebSiteName 'My WebSite Name' -Port 8080 -SourcePath 'c:\inetpub\wwwroot\myWebSite'  
+Install-WebServer -Server (Get-ChildItem env:COMPUTERNAME).Value -WebSiteName 'bupa' -Port 80 -SourcePath 'c:\www\bupa'  -VirDirPath 'C:\www\bupa\store' -AppPoolName 'dotnet40' -HostName 'test.continuity2.com' -TeachMePath 'C:\www\teachme'
