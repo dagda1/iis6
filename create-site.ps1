@@ -142,12 +142,15 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
         $objSite = [ADSI]"IIS://$Server/$id/Root"  
         $objSite.Put("DefaultDoc", "Default.aspx")  
         $objSite.Put("AppPoolId", $AppPoolName)  
-		$objsite.put("AuthFlags", 4)  
+		$objsite.put("AuthFlags", 3)  
         $objsite.Put("AppFriendlyName", $WebSiteName)  
         $objsite.Put("AccessFlags", 1)  
         $objsite.Put("AccessRead", $true)  
 		$objsite.Put("AccessWrite", $true)  
         $objsite.Put("AccessScript", $true)  
+		$objsite.Put("AuthAnonymous", $true)  
+		$objsite.Put("AuthBasic", $false) 
+		$objsite.Put("AuthNTLM", $true) 
         #$objsite.Put("AccessExecute", $true)  
         $objSite.SetInfo()	
 
@@ -158,7 +161,6 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
         	Set-FrameWorkVersion $id  
 		}  
 		
-		# enable anonymous access
 		
 		# create virtual directory
 		$newdir = $objSite.Create("IISWebVirtualDir", "store")
