@@ -1,48 +1,4 @@
 ### <summary>  
-### Creates the IIS application pool.  
-### </summary>  
-### <param name="Server">Server's name hosting website</param>  
-### <param name="AppPoolName">Application pool name</param>  
-### <param name="Domain">Domain short name</param>  
-### <param name="SAM">User's SAMAccountName</param>  
-### <param name="Password">User's password</param>  
-function Create-ApplicationPool([string]$Server, [string]$AppPoolName,  
-                                [string]$Domain, [string]$SAM, [string]$Password)  
-{  
-    trap [Exception]  
-    {  
-        $bln = $false  
-        continue  
-    }  
-    $bln = $false  
-     
-    # Check if an application pool with the same name already exists  
-    $objApp = [ADSI]"IIS://$Server/W3SVC/AppPools/$AppPoolName"  
-    if ($objApp.distinguishedname -eq $null)  
-    {  
-        # Creating application pool  
-        $objApp = [ADSI]"IIS://$Server/W3SVC/AppPools"  
-        $objPool = $objapp.Create("IIsApplicationPool", $AppPoolName)  
-        $objPool.Put('AppPoolIdentityType', 3)  
-
- 
-        # Setting Application pool credentials to $SAM  
-        $objPool.Put('WAMUserName', "$Domain\$SAM")  
-        $objPool.Put('WAMUserPass', $strPassword)  
-        $objPool.SetInfo()  
-
- 
-        # Adding user $SAM to group IIS_WPG  
-        $objGroup = [ADSI]"WinNT://$Server/IIS_WPG"  
-        $objGroup.Add("WinNT://$Domain/$SAM")  
-        $bln = $true  
-    }  
-      
-    return $bln  
-}  
-
- 
-### <summary>  
 ### Sets the .NET framework version for a given website.  
 ### Must be executed on the IIS server.  
 ### </summary>  
