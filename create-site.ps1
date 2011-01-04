@@ -66,25 +66,25 @@ function Init($SourcePath, $VirDirPath, $TeachMePath)
 function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPath, $AppPoolName, $HostName, $TeachMePath)  
 {  
 	Init $SourcePath $VirDirPath $TeachMePath
-    $objLocator = New-Object -com WbemScripting.SWbemLocator  
-    $objProvider = $objLocator.ConnectServer($Server, 'root/MicrosoftIISv2')  
-    $objService = $objProvider.Get("IIsWebService='W3SVC'")  
-    $objBindings = @($objProvider.Get('ServerBinding').SpawnInstance_())  
-    $objBindings[0].Properties_.Item('Port').value = $Port  
-	$objBindings[0].Properties_.Item('Hostname').value = $HostName
-    $createNewSiteMethod = $objService.Methods_.Item('CreateNewSite')  
+    $locator = New-Object -com WbemScripting.SWbemLocator  
+    $provider = $locator.ConnectServer($Server, 'root/MicrosoftIISv2')  
+    $iis = $provider.Get("IIsWebService='W3SVC'")  
+    $serverBindings = @($provider.Get('ServerBinding').SpawnInstance_())  
+    $serverBindings[0].Properties_.Item('Port').value = $Port  
+	$serverBindings[0].Properties_.Item('Hostname').value = $HostName
+    $createNewSiteMethod = $iis.Methods_.Item('CreateNewSite')  
   
-    $objInParameters = $createNewSiteMethod.InParameters.SpawnInstance_()  
-    $objInParameters.Properties_.Item('PathOfRootVirtualDir').value = $SourcePath  
-    $objInParameters.Properties_.Item('ServerBindings').value = $objBindings  
-    $objInParameters.Properties_.Item('ServerComment').value = $WebSiteName  
+    $inParameters = $createNewSiteMethod.InParameters.SpawnInstance_()  
+    $inParameters.Properties_.Item('PathOfRootVirtualDir').value = $SourcePath  
+    $inParameters.Properties_.Item('ServerBindings').value = $serverBindings  
+    $inParameters.Properties_.Item('ServerComment').value = $WebSiteName  
      
     # Creating new WebSite '$strWebSiteName'  
-    $objOutParameters = $objService.ExecMethod_("CreateNewSite", $objInParameters)  
+    $outParameters = $iis.ExecMethod_("CreateNewSite", $inParameters)  
  
     # Getting website ID  
     $id = ''  
-    $objOutParameters.properties_ | % {  
+    $outParameters.properties_ | % {  
         $id = $_.Value -match "[^']'([^']+)'.*"  
         if ($id) { $id = $matches[1] }  
     }  
@@ -92,20 +92,20 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
 	Write-Host "website id = $id"		
 	
 	# Configuring Website '$WebSiteName'  
-    $objSite = [ADSI]"IIS://$Server/$id/Root"  
-    $objSite.Put("DefaultDoc", "Default.aspx")  
-    $objSite.Put("AppPoolId", $AppPoolName)  
-	$objsite.put("AuthFlags", 3)  
-    $objsite.Put("AppFriendlyName", $WebSiteName)  
-    $objsite.Put("AccessFlags", 1)  
-    $objsite.Put("AccessRead", $true)  
-	$objsite.Put("AccessWrite", $true)  
-    $objsite.Put("AccessScript", $true)  
-	$objsite.Put("AuthAnonymous", $true)  
-	$objsite.Put("AuthBasic", $false) 
-	$objsite.Put("AuthNTLM", $true) 
-    #$objsite.Put("AccessExecute", $true)  
-    $objSite.SetInfo()	
+    $site = [ADSI]"IIS://$Server/$id/Root"  
+    $site.Put("DefaultDoc", "Default.aspx")  
+    $site.Put("AppPoolId", $AppPoolName)  
+	$site.put("AuthFlags", 3)  
+    $site.Put("AppFriendlyName", $WebSiteName)  
+    $site.Put("AccessFlags", 1)  
+    $site.Put("AccessRead", $true)  
+	$site.Put("AccessWrite", $true)  
+    $site.Put("AccessScript", $true)  
+	$site.Put("AuthAnonymous", $true)  
+	$site.Put("AuthBasic", $false) 
+	$site.Put("AuthNTLM", $true) 
+    #$site.Put("AccessExecute", $true)  
+    $site.SetInfo()	
  
 	# If we are on the web server itself  
     if ((Get-ChildItem env:COMPUTERNAME).Value.ToUpper() -eq $Server.ToUpper())  
@@ -114,7 +114,7 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
 	}  
 		
 	# create virtual directory
-	$storedir = Create-VirtualDir $objSite "store" $VirDirPath			
+	$storedir = Create-VirtualDir $site "store" $VirDirPath			
 	
 	# create child virtual directory
 	Create-VirtualDir $storedir "TeachMe" $TeachMePath
