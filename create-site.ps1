@@ -62,6 +62,7 @@ function Init($SourcePath, $VirDirPath, $TeachMePath)
 ### <param name="VirDirPath">Virtual directory for store directory</param> 
 ### <param name="AppPoolName">Application name</param> 
 ### <param name="HostName">Host header</param> 
+### <param name="TeachMePath">Teach me virtual directory path</param> 
 function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPath, $AppPoolName, $HostName, $TeachMePath)  
 {  
 	Init $SourcePath $VirDirPath $TeachMePath
@@ -88,72 +89,51 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
         if ($id) { $id = $matches[1] }  
     }  
 	
-	Write-Host "website id = $id"
+	Write-Host "website id = $id"		
 	
-    if ($id.ToUpper() -match "^W3SVC/\d+$")  
-    {  
-		Write-Host "Web site Id = $id"
-	
-		# Configuring Website '$WebSiteName'  
-        $objSite = [ADSI]"IIS://$Server/$id/Root"  
-        $objSite.Put("DefaultDoc", "Default.aspx")  
-        $objSite.Put("AppPoolId", $AppPoolName)  
-		$objsite.put("AuthFlags", 3)  
-        $objsite.Put("AppFriendlyName", $WebSiteName)  
-        $objsite.Put("AccessFlags", 1)  
-        $objsite.Put("AccessRead", $true)  
-		$objsite.Put("AccessWrite", $true)  
-        $objsite.Put("AccessScript", $true)  
-		$objsite.Put("AuthAnonymous", $true)  
-		$objsite.Put("AuthBasic", $false) 
-		$objsite.Put("AuthNTLM", $true) 
-        #$objsite.Put("AccessExecute", $true)  
-        $objSite.SetInfo()	
-
+	# Configuring Website '$WebSiteName'  
+    $objSite = [ADSI]"IIS://$Server/$id/Root"  
+    $objSite.Put("DefaultDoc", "Default.aspx")  
+    $objSite.Put("AppPoolId", $AppPoolName)  
+	$objsite.put("AuthFlags", 3)  
+    $objsite.Put("AppFriendlyName", $WebSiteName)  
+    $objsite.Put("AccessFlags", 1)  
+    $objsite.Put("AccessRead", $true)  
+	$objsite.Put("AccessWrite", $true)  
+    $objsite.Put("AccessScript", $true)  
+	$objsite.Put("AuthAnonymous", $true)  
+	$objsite.Put("AuthBasic", $false) 
+	$objsite.Put("AuthNTLM", $true) 
+    #$objsite.Put("AccessExecute", $true)  
+    $objSite.SetInfo()	
  
-        # If we are on the web server itself  
-        if ((Get-ChildItem env:COMPUTERNAME).Value.ToUpper() -eq $Server.ToUpper())  
-        {  
-        	Set-FrameWorkVersion $id  
-		}  
+	# If we are on the web server itself  
+    if ((Get-ChildItem env:COMPUTERNAME).Value.ToUpper() -eq $Server.ToUpper())  
+    {  
+    	Set-FrameWorkVersion $id  
+	}  
 		
+	# create virtual directory
+	$storedir = Create-VirtualDir $objSite "store" $VirDirPath			
+	
+	# create child virtual directory
+	Create-VirtualDir $storedir "TeachMe" $TeachMePath
 		
-		# create virtual directory
-		$newdir = $objSite.Create("IISWebVirtualDir", "store")
-		$newdir.Put("Path", $VirDirPath)
-		$newdir.Put("AccessRead",$true)
-		$newdir.Put("AccessWrite",$true)
-		$newdir.Put("AccessScript", $true)  
-		$newdir.AppCreate2(1) 
-		$newdir.Put("AppFriendlyName", "store")
-		$newdir.SetInfo()		
+	# set ssl properties
 		
-		# create child virtual directory
-		$childdir = $newdir.Create("IISWebVirtualDir", "TeachMe")
-		$childdir.Put("Path", $TeachMePath)
-		$childdir.Put("AccessRead",$true)
-		$childdir.Put("AccessWrite",$true)
-		$childdir.Put("AccessScript", $true) 
-		$childdir.AppCreate2(1) 
-		$childdir.Put("AppFriendlyName", "TeachMe")		
-		$childdir.SetInfo()
-		
-		# set ssl properties
-		
-		# start website
-    }  
+	# start website	
 }  
 
 function Create-VirtualDir($Parent, $FriendlyName, $VirPath)
 {
 	$newdir = $Parent.Create("IISWebVirtualDir", $FriendlyName)
-	$newdir.Put("Path", $VirPath)
-	$newdir.Put("AccessRead", $true)
-	$newdir.Put("AccessWrite",$true)
-	$newdir.Put("AccessScript", $true)  
-	$childdir.AppCreate2(1) 
-	$childdir.Put("AppFriendlyName", $FriendlyName)		
-	$newdir.SetInfo()
+	[Void]$newdir.Put("Path", $VirPath)
+	[Void]$newdir.Put("AccessRead", $true)
+	[Void]$newdir.Put("AccessWrite",$true)
+	[Void]$newdir.Put("AccessScript", $true)  
+	[Void]$newdir.AppCreate2(1) 
+	[Void]$newdir.Put("AppFriendlyName", $FriendlyName)		
+	[Void]$newdir.SetInfo()
 	return $newdir
 }
 
