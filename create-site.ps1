@@ -120,9 +120,29 @@ function Install-WebServer($Server, $WebSiteName, $Port, $SourcePath, $VirDirPat
 	Create-VirtualDir $storedir "TeachMe" $TeachMePath
 		
 	# set ssl properties
+	Set-SSLWildcard $Server $id $HostName
 		
 	# start website	
 }  
+
+function Set-SSLWildcard($server, $appid, $hostname)
+{
+	$site = New-Object System.DirectoryServices.DirectoryEntry("IIS://$Server/W3SVC/$appid")
+	$bindings = [array]$site.psbase.Properties["SecureBindings"].Value
+
+	$newBinding = ":443:$hostname"
+	if($bindings -eq $null)
+	{
+		$newBindings = @($newBinding)
+	}
+	else
+	{
+		$newBindings = @($newBinding) + $bindings
+	}
+		
+	$site.psbase.Properties["SecureBindings"].Value = $newBindings
+	$site.psbase.CommitChanges()
+}
 
 function Create-VirtualDir($Parent, $FriendlyName, $VirPath)
 {
@@ -138,4 +158,4 @@ function Create-VirtualDir($Parent, $FriendlyName, $VirPath)
 }
 
   
-Install-WebServer -Server (Get-ChildItem env:COMPUTERNAME).Value -WebSiteName 'bupa' -Port 80 -SourcePath 'c:\www\bupa'  -VirDirPath 'C:\www\bupa\store' -AppPoolName 'dotnet40' -HostName 'test.continuity2.com' -TeachMePath 'C:\www\teachme'
+Install-WebServer -Server (Get-ChildItem env:COMPUTERNAME).Value -WebSiteName 'northumbria' -Port 80 -SourcePath 'D:\www\northumbria'  -VirDirPath 'E:\northumbria\store' -AppPoolName 'net-40-II' -HostName 'northumbriahealthcare.continuity2.com' -TeachMePath 'E:\TeachMe'
